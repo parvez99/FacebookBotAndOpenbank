@@ -23,7 +23,7 @@ http.createServer(app).listen(app.get('port'), function() {
   console.log('Express server is listening on port ' + app.get('port'));
 });
 
-//This function will get the user ID and the message
+//This function will get the user ID and the user message
 // and it'll call sendHelp function to send a basic help reply to the user
 
 function handleMessage(req, res) {
