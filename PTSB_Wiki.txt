@@ -20,7 +20,7 @@ function verificationHandler(req, res) {
 
 // Creates a server at port : 8080 listening for requests
 http.createServer(app).listen(app.get('port'), function() {
-  console.log('Express server listening on port ' + app.get('port'));
+  console.log('Express server is listening on port ' + app.get('port'));
 });
 
 //This function will get the user ID and the message
