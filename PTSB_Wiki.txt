@@ -1,0 +1,143 @@
+var express = require('express'); //express handles routes
+var http = require('http'); //need http module to create a server
+var app = express(); //starting express
+var messaging_events;
+var request = require('request'); //needed to send response to user
+app.set('port', process.env.PORT || 3000); //set port to cloud9 specific port or 3000
+app.use(express.bodyParser()); //body parser used to parse request data
+app.use(app.router);
+app.get('/', verificationHandler); // not necessary, but used just to verify the webhook setup
+app.post('/',handleMessage); // method 'handleMessage' is called for every post request
+
+// Called to verify the token provided in the webhook
+function verificationHandler(req, res) {
+  console.log(req);
+  if (req.query['hub.verify_token'] === 'verifycode') {
+    res.send(req.query['hub.challenge']);
+  }
+  res.send('Error, wrong validation token!');
+}
+
+// Creates a server at port : 8080 listening for requests
+http.createServer(app).listen(app.get('port'), function() {
+  console.log('Express server listening on port ' + app.get('port'));
+});
+
+//This function will get the user ID and the message
+// and it'll call sendHelp function to send a basic help reply to the user
+
+function handleMessage(req, res) {
+  messaging_events = req.body.entry[0].messaging;
+  console.log(messaging_events);
+  for (var i = 0; i < messaging_events.length; i++) {
+    event = req.body.entry[0].messaging[i];
+    var sender = event.sender.id;
+    if (event.message && event.message.text) {
+      var text = event.message.text;
+      wikibot(text,sender); //sendHelp called with senderID
+    }
+  }
+  res.end('received!');
+}
+
+// url : contains accessToken generated from Facebook developers App
+var url = "https://graph.facebook.com/v2.6/me/messages?access_token=EAAQwsXuoN80BAD9ZBFPf8N55dr8zcHnu6zW3mdXZBCnJbGPkysQ4LdiL7si2bypqenVFWLAQL6ZBJGExP9150OxJ3qGG4FrU2OFZAesz2tMZC9vNUJ2pIC2T5IZARCEeeaZBI9O38ZB36QFJnYZCh5132PEBV8FZBZB4mDZBaExSkVGmswZDZD" //replace with your page token
+
+//sendHelp sends basic welcome message to the user
+function sendHelp(id) {
+var options = {
+    uri: url,
+    method: 'POST',
+    json: {
+      "recipient": {
+        "id": id
+      },
+      "message": {
+        "text": "Send wiki space 'Your query' to search wikipedia"
+      }
+    }
+  }
+  request(options, function(error, response, body) {
+    if (error) {
+      console.log(error.message);
+    }
+  });
+};
+
+
+function wikibot(query, userid) {
+  var queryUrl = "https://en.wikipedia.org/w/api.php?format=json&action=query&generator=search&gsrnamespace=0&gsrlimit=10&prop=extracts&exintro&explaintext&exsentences=5&exlimit=max&gsrsearch=" + query;
+  var myTemplate = {
+    recipient: {
+      id: userid
+    },
+    message: {
+      attachment: {
+        type: "template",
+        payload: {
+          template_type: "generic",
+          elements: []
+        }
+      }
+    }
+  };
+  var options = {
+    url: url,
+    method: 'POST',
+    body: myTemplate,
+    json: true
+  }
+  request(queryUrl, function(error, response, body) {
+    if (error) {
+      console.log(error);
+    }
+    try {
+      body = JSON.parse(body);
+      var pages = body.query.pages;
+      for (var i = 0 in pages) {
+        var myelement = {
+          title: "",
+          subtitle: "",
+          buttons: [{
+            type: "postback",
+            title: "Read more",
+            payload: "Nothing here, Please view in browser"
+          }, {
+            type: "web_url",
+            url: "",
+            title: "View in browser"
+          }]
+        };
+        myelement.title = pages[i].title;
+        myelement.subtitle = pages[i].extract.substr(0, 80).trim();
+        myelement.buttons[1].url = "https://en.wikipedia.org/?curid=" + pages[i].pageid;
+        if (pages[i].extract != "") {
+        myelement.buttons[0].payload = pages[i].extract.substr(0, 1000).trim();
+        }
+        myTemplate.message.attachment.payload.elements.push(myelement);
+      }
+      options.body = myTemplate;
+    }
+    catch (err) {
+      console.log("error : " + err.message);
+      options = {
+        uri: url,
+        method: 'POST',
+        json: {
+          "recipient": {
+            "id": userid
+          },
+          "message": {
+            "text": "Something went wrong, please try again."
+          }
+        }
+      }
+    }
+    request(options, function(error, response, body) {
+      if (error) {
+        console.log(error.message);
+      }
+      console.log(body);
+    });
+  })
+};
